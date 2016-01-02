@@ -9,6 +9,16 @@
 
     <h1>Angular w/ Firebase</h1>
 
+
+    <div style="background-color:#eeeeee">
+      <h4>Logging In Users <br> <small>w/ Angular </small></h4>
+      <div ng-controller="userCtrl">
+        <a href="#" ng-click="loginUser()">Login Using Facebook</a>
+      </div>
+    </div>
+
+
+
     <div style="background-color:#eeeeee">
       <h4>Adding Establishments <br> <small>w/ Jquery </small></h4>
       <input id="txtestablishmentName" type="text" placeholder="Establishment Name" />
@@ -61,7 +71,7 @@
     <script>
 
     angular.module("myTestApp", ["firebase"])
-    .controller("mainCtrl", function($scope, $firebaseArray,$firebaseObject) {
+    .controller("mainCtrl", function($scope, $firebaseArray,$firebaseObject,$firebaseAuth) {
       var placesRef = new Firebase("https://mysweetapp.firebaseio.com/Places");
 
       $scope.Places = $firebaseArray(placesRef);
@@ -71,17 +81,35 @@
       }
     })
     .controller("commentCtrl", function($scope,$firebaseObject) {
-
       $scope.addComment = function(){
-
-
         var placesRef = new Firebase("https://mysweetapp.firebaseio.com/Places/"+ $scope.EstablishmentID +"/Comments");
         placesRef.push({
           comment : $scope.commenttext
         })
+      } //end addComment
+    })
+    .controller("userCtrl", function($scope,$firebaseAuth) {
 
+      $scope.loginUser = function(){
+        var ref = new Firebase("https://mysweetapp.firebaseio.com");
+        var auth = $firebaseAuth(ref);
+        ref.authWithOAuthPopup("facebook", function(error, authData) {
 
-      }
+          if (error) {
+            console.log("Login Failed!", error);
+          } else {
+            console.log("Authenticated successfully with payload:", authData);
+            //check if user exists already, or its a new user.
+            // After the check and possible save logic, then we will need to set a scope
+            // variable that holds the users ID, so we can use it when we save a review. 
+          }
+
+         }, {
+          remember: "sessionOnly",
+          scope: "email,user_likes"
+        });
+
+      } // end login user
 
     });
 
