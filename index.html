@@ -10,12 +10,7 @@
     <h1>Angular w/ Firebase</h1>
 
 
-    <div style="background-color:#eeeeee">
-      <h4>Logging In Users <br> <small>w/ Angular </small></h4>
-      <div ng-controller="userCtrl">
-        <a href="#" ng-click="loginUser()">Login Using Facebook</a>
-      </div>
-    </div>
+
 
 
 
@@ -32,7 +27,7 @@
 
       <div style="background-color:#eeeeee">
         <h4>Adding in Comments <br> <small>w/ Angular</small></h4>
-        <div ng-controller="mainCtrl">
+        <div ng-controller="mainCtrl" ng-init="loginUser()">
           <ul>
           <li ng-click="setEstablishment(place.$id)" ng-repeat="place in Places"><b>{{ place.establishment }} {{place.$id}}</b></small>
           <ul><li ng-repeat="comment in place.Comments">{{comment.comment}}</li></ul>
@@ -49,6 +44,16 @@
 
             </li>
             </ul>
+          </div>
+          <div style="background-color:#eeeeee">
+            <h4>Logging In Users <br> <small>w/ Angular </small></h4>
+            <p>Hello, {{ authData.facebook.displayName }}</p>
+            <a href="#" ng-click="loginUser()">Login Using Facebook</a>
+            <a href="#" ng-click="logoutUser()">Logout</a>
+            <p ng-if="authData">Logged in user: <strong>{{ authData.uid }}</strong></p>
+            <p ng-if="error">Error: <strong>{{ error }}</strong></p>
+
+
           </div>
         </div>
       </div>
@@ -71,15 +76,61 @@
     <script>
 
     angular.module("myTestApp", ["firebase"])
-    .controller("mainCtrl", function($scope, $firebaseArray,$firebaseObject,$firebaseAuth) {
+    .controller("mainCtrl", function($scope, $firebaseArray,$firebaseObject,$firebaseAuth,dataService) {
       var placesRef = new Firebase("https://mysweetapp.firebaseio.com/Places");
-
+      var ref = new Firebase("https://mysweetapp.firebaseio.com");
+      $scope.auth = $firebaseAuth(ref);
       $scope.Places = $firebaseArray(placesRef);
       $scope.EstablishmentID = 'notSet';
+      $scope.userLoggedIn = 'is logged out';
+
+      $scope.auth.$onAuth(function(authData) {
+        $scope.authData = authData;
+
+      })
+
+
       $scope.setEstablishment = function(thePlace){
         $scope.EstablishmentID = thePlace;
       }
+
+
+
+      $scope.logoutUser = function(){
+        $scope.auth.$unauth();
+        $scope.userLoggedIn = 'is logged out';
+      }
+
+      $scope.loginUser = function(){
+
+        //check if user is logged in already.
+        // TODO: check if undefined too.. 
+        if ($scope.authData === null){
+          alert('user is not logged in');
+          //then log them in with facebook
+          ref.authWithOAuthPopup("facebook", function(error, authData) {
+            if (error) {
+              console.log("Login Failed!", error);
+            } else {
+              console.log("Authenticated successfully with payload:", authData);
+              //check if user exists already, or its a new user.
+              // After the check and possible save logic, then we will need to set a scope
+              // variable that holds the users ID, so we can use it when we save a review.
+              $scope.userLoggedIn = 'is logged in';
+            }
+          });
+
+        } else {
+          //they are already logged in.
+          alert('user already logged in');
+        }
+
+
+
+        }  // end login user
+
     })
+
     .controller("commentCtrl", function($scope,$firebaseObject) {
       $scope.addComment = function(){
         var placesRef = new Firebase("https://mysweetapp.firebaseio.com/Places/"+ $scope.EstablishmentID +"/Comments");
@@ -88,30 +139,14 @@
         })
       } //end addComment
     })
-    .controller("userCtrl", function($scope,$firebaseAuth) {
 
-      $scope.loginUser = function(){
-        var ref = new Firebase("https://mysweetapp.firebaseio.com");
-        var auth = $firebaseAuth(ref);
-        ref.authWithOAuthPopup("facebook", function(error, authData) {
 
-          if (error) {
-            console.log("Login Failed!", error);
-          } else {
-            console.log("Authenticated successfully with payload:", authData);
-            //check if user exists already, or its a new user.
-            // After the check and possible save logic, then we will need to set a scope
-            // variable that holds the users ID, so we can use it when we save a review. 
-          }
+    .service('dataService',function(){
 
-         }, {
-          remember: "sessionOnly",
-          scope: "email,user_likes"
-        });
 
-      } // end login user
 
     });
+
 
     </script>
 
