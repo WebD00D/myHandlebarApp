@@ -9,11 +9,6 @@
 
     <h1>Angular w/ Firebase</h1>
 
-
-
-
-
-
     <div style="background-color:#eeeeee">
       <h4>Adding Establishments <br> <small>w/ Jquery </small></h4>
       <input id="txtestablishmentName" type="text" placeholder="Establishment Name" />
@@ -51,9 +46,12 @@
             <a href="#" ng-click="loginUser()">Login Using Facebook</a>
             <a href="#" ng-click="logoutUser()">Logout</a>
             <p ng-if="authData">Logged in user: <strong>{{ authData.uid }}</strong></p>
+            <img ng-show="facebookProfileImg!==''" ng-src="{{facebookProfileImg || '//:0'}}">
             <p ng-if="error">Error: <strong>{{ error }}</strong></p>
-
-
+            <Br>
+            <Br><BR>
+            <h4>Sign Up With FaceBook</h4>
+            <a ng-click="signupUser()" href="">Sign Up</a>
           </div>
         </div>
       </div>
@@ -83,30 +81,51 @@
       $scope.Places = $firebaseArray(placesRef);
       $scope.EstablishmentID = 'notSet';
       $scope.userLoggedIn = 'is logged out';
+      $scope.isNewUser = false;
+
 
       $scope.auth.$onAuth(function(authData) {
         $scope.authData = authData;
-
+        if (authData && $scope.isNewUser) {
+          // save the user's profile into the database so we can list users,
+          // use them in Security and Firebase Rules, and show profiles
+            ref.child("users").child(authData.uid).set({
+            provider: authData.provider,
+            name: authData.facebook.displayName
+          });
+          console.log('new user created and saved to the db!');
+        }
       })
-
 
       $scope.setEstablishment = function(thePlace){
         $scope.EstablishmentID = thePlace;
       }
 
-
-
       $scope.logoutUser = function(){
         $scope.auth.$unauth();
         $scope.userLoggedIn = 'is logged out';
+        console.log('user is now logged out');
+        $scope.facebookProfileImg = '';
       }
 
       $scope.loginUser = function(){
 
-        //check if user is logged in already.
-        // TODO: check if undefined too.. 
-        if ($scope.authData === null){
-          alert('user is not logged in');
+        //TODO: first things first -> check if the user object already exists. If so, then the user
+        // is already logged in and we can just pull users facebook creds and set various scope variables,
+        // and show the respective view.
+
+        // If no user is logged in, then we need to log them in! We'll run the Facebook auth code.
+        // Once logged in, inside the $onAuth callback lets pulls the UID and run a function
+        // that checks if that user exists in the database. if it doesn't exists then we'll set new User to true
+        // and create them as a user. Finally whether they exist or not, well use the authData object and set
+        // the respective variables.
+
+         
+        //check if user is logged in
+        var user = ref.getAuth();
+        if (user==null){
+          //user not logged in
+          console.log('user is not logged in');
           //then log them in with facebook
           ref.authWithOAuthPopup("facebook", function(error, authData) {
             if (error) {
@@ -117,19 +136,35 @@
               // After the check and possible save logic, then we will need to set a scope
               // variable that holds the users ID, so we can use it when we save a review.
               $scope.userLoggedIn = 'is logged in';
+              $scope.facebookProfileImg = authData.facebook.profileImageURL
+
             }
           });
-
         } else {
-          //they are already logged in.
-          alert('user already logged in');
-        }
+          //user is logged in
+          console.log("user is already logged in.");
+          $scope.facebookProfileImg = user.facebook.profileImageURL;
+          $scope.userLoggedIn = 'is logged in';
+        };
+      }  // end login user
 
+      $scope.signupUser = function(){
+          $scope.isNewUser = true;
+          ref.authWithOAuthPopup("facebook", function(error, authData) {
+            if (error) {
+              console.log("Login Failed!", error);
+            } else {
+              console.log("Authenticated successfully with payload:", authData);
+              //check if user exists already, or its a new user.
+              // After the check and possible save logic, then we will need to set a scope
+              // variable that holds the users ID, so we can use it when we save a review.
+              $scope.userLoggedIn = 'is logged in';
+              $scope.facebookProfileImg = authData.facebook.profileImageURL
+            }
+          });
+      }
 
-
-        }  // end login user
-
-    })
+    }) // end main controller
 
     .controller("commentCtrl", function($scope,$firebaseObject) {
       $scope.addComment = function(){
