@@ -25,7 +25,7 @@
         <div ng-controller="mainCtrl" ng-init="loginUser()">
           <ul>
           <li ng-click="setEstablishment(place.$id)" ng-repeat="place in Places"><b>{{ place.establishment }} {{place.$id}}</b></small>
-          <ul><li ng-repeat="comment in place.Comments">{{comment.comment}}</li></ul>
+          <ul><li ng-repeat="comment in place.Comments">{{comment.comment}} - {{comment.displayName}} <img style="border-radius:40px" height="30px" ng-src="{{comment.userPhotoURL}}"></li></ul>
           </li>
           </ul>
           <h4>Pulling in Data <br> <small>w/ Angular</small></h4>
@@ -35,7 +35,8 @@
             {{commenttext}}
             <Br>
             <Br>
-            <a ng-click="addComment()"  href="">Save Comment</a>
+            <a ng-click="addComment('mooveon')"  href="">Moove On</a>
+            <a ng-click="addComment('makemoove')"  href="">Make Mooves</a>
 
             </li>
             </ul>
@@ -43,15 +44,15 @@
           <div style="background-color:#eeeeee">
             <h4>Logging In Users <br> <small>w/ Angular </small></h4>
             <p>Hello, {{ authData.facebook.displayName }}</p>
-            <a href="#" ng-click="loginUser()">Login Using Facebook</a>
+            <a href="#" ng-hide="userLoggedIn" ng-click="loginUser()">Login Using Facebook</a>
             <a href="#" ng-click="logoutUser()">Logout</a>
             <p ng-if="authData">Logged in user: <strong>{{ authData.uid }}</strong></p>
             <img ng-show="facebookProfileImg!==''" ng-src="{{facebookProfileImg || '//:0'}}">
             <p ng-if="error">Error: <strong>{{ error }}</strong></p>
             <Br>
             <Br><BR>
-            <h4>Sign Up With FaceBook</h4>
-            <a ng-click="signupUser()" href="">Sign Up</a>
+            <a href='#' ng-click="setPointsatEstablishment()">Set up Establishment</a>
+
           </div>
         </div>
       </div>
@@ -80,16 +81,26 @@
       $scope.auth = $firebaseAuth(ref);
       $scope.Places = $firebaseArray(placesRef);
       $scope.EstablishmentID = 'notSet';
-      $scope.userLoggedIn = 'is logged out';
+      $scope.theEstablishment = '';
+      $scope.userLoggedIn = false;
       $scope.isNewUser = false;
-
 
       $scope.auth.$onAuth(function(authData) {
         $scope.authData = authData;
+        var userRef = new Firebase("https://mysweetapp.firebaseio.com/Users");
+        userRef.once("value", function(snapshot) {
+          var userExists = (snapshot.val() !== null);
+          console.log('user exists:' + userExists);
+          if (userExists === false){
+            console.log('the user doesnt exist.. create them.');
+            $scope.isNewUser = true;
+          }
+        });
+
         if (authData && $scope.isNewUser) {
           // save the user's profile into the database so we can list users,
           // use them in Security and Firebase Rules, and show profiles
-            ref.child("users").child(authData.uid).set({
+            ref.child("Users").child(authData.uid).set({
             provider: authData.provider,
             name: authData.facebook.displayName
           });
@@ -99,11 +110,12 @@
 
       $scope.setEstablishment = function(thePlace){
         $scope.EstablishmentID = thePlace;
+        $scope.theEstablishment = $firebaseObject(ref.child('Places').child(thePlace));
       }
 
       $scope.logoutUser = function(){
         $scope.auth.$unauth();
-        $scope.userLoggedIn = 'is logged out';
+        $scope.userLoggedIn = false;
         console.log('user is now logged out');
         $scope.facebookProfileImg = '';
       }
@@ -120,7 +132,7 @@
         // and create them as a user. Finally whether they exist or not, well use the authData object and set
         // the respective variables.
 
-         
+
         //check if user is logged in
         var user = ref.getAuth();
         if (user==null){
@@ -135,45 +147,92 @@
               //check if user exists already, or its a new user.
               // After the check and possible save logic, then we will need to set a scope
               // variable that holds the users ID, so we can use it when we save a review.
-              $scope.userLoggedIn = 'is logged in';
+              $scope.userLoggedIn = true;
               $scope.facebookProfileImg = authData.facebook.profileImageURL
-
             }
           });
         } else {
           //user is logged in
           console.log("user is already logged in.");
           $scope.facebookProfileImg = user.facebook.profileImageURL;
-          $scope.userLoggedIn = 'is logged in';
+          $scope.userLoggedIn = true;
         };
       }  // end login user
 
-      $scope.signupUser = function(){
-          $scope.isNewUser = true;
-          ref.authWithOAuthPopup("facebook", function(error, authData) {
-            if (error) {
-              console.log("Login Failed!", error);
-            } else {
-              console.log("Authenticated successfully with payload:", authData);
-              //check if user exists already, or its a new user.
-              // After the check and possible save logic, then we will need to set a scope
-              // variable that holds the users ID, so we can use it when we save a review.
-              $scope.userLoggedIn = 'is logged in';
-              $scope.facebookProfileImg = authData.facebook.profileImageURL
-            }
-          });
+      $scope.setPointsatEstablishment = function(){
+        var placesRef = new Firebase("https://mysweetapp.firebaseio.com/Places/"+ $scope.EstablishmentID);
+        placesRef.update({
+          pointsNeeded: 2,
+          rewardEarned: '$1 off draft beer'
+        })
       }
+
 
     }) // end main controller
 
     .controller("commentCtrl", function($scope,$firebaseObject) {
-      $scope.addComment = function(){
+
+      $scope.addComment = function(moovetype){
+        var UserCommentref = new Firebase("https://mysweetapp.firebaseio.com");
+        var user = UserCommentref.getAuth();
+
         var placesRef = new Firebase("https://mysweetapp.firebaseio.com/Places/"+ $scope.EstablishmentID +"/Comments");
         placesRef.push({
-          comment : $scope.commenttext
+          comment : $scope.commenttext,
+          user: user.uid,
+          displayName:user.facebook.displayName,
+          userPhotoURL: user.facebook.profileImageURL
         })
+        $scope.addScore(user.uid,moovetype);
       } //end addComment
-    })
+
+      $scope.addScore = function(userid,moove){
+
+        // get points needed at establishment
+        var pointsNeeded = $scope.theEstablishment.pointsNeeded;
+
+        // get points user has at establishment
+        var userEstabRef = new Firebase("https://mysweetapp.firebaseio.com/Users/"+ userid + "/Points/"+$scope.EstablishmentID );
+        userEstabRef.once("value", function(snapshot) {
+        var scoreSnapshot = snapshot.child("score");
+        var userScore = scoreSnapshot.val();
+
+        // if points user has is one less than points needed then
+        // increment points in the db and show user they have earned a reward.
+        var oneAway = pointsNeeded - 1
+        if (oneAway === 1){
+          console.log('you are about to earn a reward!');
+        } else {
+            var pointsAway = pointsNeeded - userScore;
+            console.log('you are still '+ pointsAway +' points away!');
+        }
+
+        // if points user has is more than one less than points they need increment
+        // theire points and show a message that a point was earned.
+
+        // if points they have are equal to the points they need then check
+        // to see if the reward they have for the establishment has been claimed.
+        // If the reward has not been claimed then show a message that they have a reward
+        // waiting to be used. If they have used the reward, then show a message thanking them
+        // and to play again next week for a reward.
+
+        });
+
+
+        // last add count to establishments moove on / mooves made counter.
+
+        return;
+        var userRef = new Firebase("https://mysweetapp.firebaseio.com/Users/"+ userid + "/Points/"+$scope.EstablishmentID );
+        userRef.update({
+          score: 1
+        })
+      }
+
+
+
+
+
+    }) // end comment controller
 
 
     .service('dataService',function(){
