@@ -52,7 +52,15 @@
             <Br>
             <Br><BR>
             <a href='#' ng-click="setPointsatEstablishment()">Set up Establishment</a>
+          </div>
+          <div style="background-color:#808080">
+            <h4>Pulling in Points and Rewards</h4>
+            <ul ng-show="viewRewards">
+            <li ng-repeat="place in Places"><b>{{ place.establishment }} {{place.$id}}</b></small>
+            </li>
+            </ul>
 
+            <a href="#" ng-click="getRewards()">Get Rewards</a>
           </div>
         </div>
       </div>
@@ -60,17 +68,10 @@
       <Br><Br>
 
 
-
-
-
-
-
     <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.3.15/angular.min.js"></script>
     <script src='https://cdn.firebase.com/js/client/2.2.1/firebase.js'></script>
     <script src="https://cdn.firebase.com/libs/angularfire/1.1.3/angularfire.min.js"></script>
     <script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
-
-
 
     <script>
 
@@ -84,6 +85,8 @@
       $scope.theEstablishment = '';
       $scope.userLoggedIn = false;
       $scope.isNewUser = false;
+    
+      $scope.viewRewards = false;
 
       $scope.auth.$onAuth(function(authData) {
         $scope.authData = authData;
@@ -108,6 +111,10 @@
         }
       })
 
+      $scope.getRewards = function(){
+        $scope.viewRewards = true;
+      }
+
       $scope.setEstablishment = function(thePlace){
         $scope.EstablishmentID = thePlace;
         $scope.theEstablishment = $firebaseObject(ref.child('Places').child(thePlace));
@@ -125,13 +132,11 @@
         //TODO: first things first -> check if the user object already exists. If so, then the user
         // is already logged in and we can just pull users facebook creds and set various scope variables,
         // and show the respective view.
-
         // If no user is logged in, then we need to log them in! We'll run the Facebook auth code.
         // Once logged in, inside the $onAuth callback lets pulls the UID and run a function
         // that checks if that user exists in the database. if it doesn't exists then we'll set new User to true
         // and create them as a user. Finally whether they exist or not, well use the authData object and set
         // the respective variables.
-
 
         //check if user is logged in
         var user = ref.getAuth();
@@ -163,7 +168,7 @@
         var placesRef = new Firebase("https://mysweetapp.firebaseio.com/Places/"+ $scope.EstablishmentID);
         placesRef.update({
           pointsNeeded: 2,
-          rewardEarned: '$1 off draft beer'
+          rewardEarned: '$1 24oz. Genese Can'
         })
       }
 
@@ -184,53 +189,103 @@
           userPhotoURL: user.facebook.profileImageURL
         })
         $scope.addScore(user.uid,moovetype);
-      } //end addComment
+        } //end addComment
 
-      $scope.addScore = function(userid,moove){
+          $scope.addScore = function(userid,moove){
 
-        // get points needed at establishment
-        var pointsNeeded = $scope.theEstablishment.pointsNeeded;
+            //REMEMBER: add logic to check if establishment is a Moove partner. If they aren't then we can skip
+            //the whole adding of points logic.
 
-        // get points user has at establishment
-        var userEstabRef = new Firebase("https://mysweetapp.firebaseio.com/Users/"+ userid + "/Points/"+$scope.EstablishmentID );
-        userEstabRef.once("value", function(snapshot) {
-        var scoreSnapshot = snapshot.child("score");
-        var userScore = scoreSnapshot.val();
+            // get points needed at establishment
+            var pointsNeeded = $scope.theEstablishment.pointsNeeded;
 
-        // if points user has is one less than points needed then
-        // increment points in the db and show user they have earned a reward.
-        var oneAway = pointsNeeded - 1
-        if (oneAway === 1){
-          console.log('you are about to earn a reward!');
-        } else {
+
+
+            // get points user has at establishment
+            var userEstabRef = new Firebase("https://mysweetapp.firebaseio.com/Users/"+ userid + "/Points/"+$scope.EstablishmentID );
+            userEstabRef.once("value", function(snapshot) {
+            var scoreSnapshot = snapshot.child("score");
+            var userScore = scoreSnapshot.val();
+
+
+
+            var userRef = new Firebase("https://mysweetapp.firebaseio.com/Users/"+ userid + "/Points/"+$scope.EstablishmentID );
+            var oneAway = pointsNeeded - userScore
             var pointsAway = pointsNeeded - userScore;
-            console.log('you are still '+ pointsAway +' points away!');
-        }
+            var userMessage = '';
 
-        // if points user has is more than one less than points they need increment
-        // theire points and show a message that a point was earned.
+            //first time earning a point for establishment that week.
+              if (userScore === null){
+              userMessage = "Hooray! You've just earned a point! Only " + pointsAway + " to go to earn a reward.";
+              userRef.update({
+                score: 1,
+                rewardEarned: false,
+                rewardClaimed: false
+              })
+            } else {
+            //TODO: update points
+            // but before we update, lets check the points to see if the user
+            // has earned anything.
 
-        // if points they have are equal to the points they need then check
-        // to see if the reward they have for the establishment has been claimed.
-        // If the reward has not been claimed then show a message that they have a reward
-        // waiting to be used. If they have used the reward, then show a message thanking them
-        // and to play again next week for a reward.
+            var pointsTheyHave = userScore;
+            var titleMessage = '';
+            var confirmMessage = '';
+            var rewardEarned = false;
+
+            if (pointsTheyHave + 1 == pointsNeeded){
+              titleMessage = 'Hurray!'
+              confirmMessage = "You've just earned a reward at ";
+              rewardEarned = true;
+            } else {
+              titleMessage = '+1 Point Earned!'
+              confirmMessage = "You've earned another point at ";
+            }
+
+            console.log(confirmMessage);
+
+            if (userScore == pointsNeeded){
+
+              rewardEarned = true;
+
+              //they've already earned the reward, so no need to update anything. Maybe just let them know they
+              //can't earn any more points until they redeem their current reward.
+
+              var message = '';
+              var rewardEarnedSnapshot = snapshot.child("rewardClaimed");
+              var rewardClaimed = rewardEarnedSnapshot.val();
+
+              if (rewardClaimed){
+                  message = "Thanks for making all the mooves you have at " + $scope.EstablishmentID + "!  Start again next Monday to earn another reward!";
+              } else {
+                 message = "Did you know you have a reward for " + $scope.EstablishmentID + " waiting to be used? Hurry and use it before it expires on Monday!"
+              }
+
+              console.log(message);
+
+              // swal({
+              //   confirmButtonColor: "#009688",
+              //   title: "Moove Made!",
+              //   text: message,
+              //   type: "success"
+              // })
+
+              return;
+            }
+
+            userRef.update({
+              score: userScore + 1,
+              rewardEarned: rewardEarned
+            })
+
+
+
+          } // end else
 
         });
 
-
         // last add count to establishments moove on / mooves made counter.
 
-        return;
-        var userRef = new Firebase("https://mysweetapp.firebaseio.com/Users/"+ userid + "/Points/"+$scope.EstablishmentID );
-        userRef.update({
-          score: 1
-        })
       }
-
-
-
-
 
     }) // end comment controller
 
